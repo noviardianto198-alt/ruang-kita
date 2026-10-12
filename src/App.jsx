@@ -12,6 +12,11 @@ function App() {
 
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
+  
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState("");
+  const [avatarLoading, setAvatarLoading] = useState(false);
+  const [avatarMessage, setAvatarMessage] = useState("");
 
   const [exploreSearch, setExploreSearch] = useState("");
   const [exploreSort, setExploreSort] = useState("terbaru");
@@ -98,6 +103,8 @@ const topicList = Object.values(topics).sort(
   const [commentInputs, setCommentInputs] = useState({});
   const [commentLoading, setCommentLoading] = useState({});
   const [openComments, setOpenComments] = useState({});
+  const [replyInputs, setReplyInputs] = useState({});
+  const [replyingTo, setReplyingTo] = useState(null);
 
   const [showPostForm, setShowPostForm] = useState(false);
   const [postTitle, setPostTitle] = useState("");
@@ -105,6 +112,8 @@ const topicList = Object.values(topics).sort(
   const [postContent, setPostContent] = useState("");
   const [postSubmitting, setPostSubmitting] = useState(false);
   const [postSubmitError, setPostSubmitError] = useState("");
+  const [postImage, setPostImage] = useState(null);
+  const [postImagePreview, setPostImagePreview] = useState("");
 
   const [editingPostId, setEditingPostId] = useState(null);
   const [editPostTitle, setEditPostTitle] = useState("");
@@ -112,6 +121,410 @@ const topicList = Object.values(topics).sort(
   const [editPostContent, setEditPostContent] = useState("");
   const [editPostSaving, setEditPostSaving] = useState(false);
   const [editPostError, setEditPostError] = useState("");
+  const [editPostImage, setEditPostImage] = useState(null);
+  const [editPostImagePreview, setEditPostImagePreview] = useState("");
+  const [removePostImage, setRemovePostImage] = useState(false);
+  
+  const [communities, setCommunities] = useState([]);
+  const [communitiesLoading, setCommunitiesLoading] = useState(true);
+  const [communitiesError, setCommunitiesError] = useState("");
+  const [selectedCommunity, setSelectedCommunity] = useState(null);
+  const [communityMembers, setCommunityMembers] = useState([]);
+  const [communityMembersLoading, setCommunityMembersLoading] = useState(false);
+  const [communityActionLoading, setCommunityActionLoading] = useState(false);
+  const [communityMessage, setCommunityMessage] = useState("");
+
+  
+const fetchCommunities = async () => {
+  setCommunitiesLoading(true);
+  setCommunitiesError("");
+
+  const { data: communityData, error: communityError } =
+    await supabase
+      .from("communities")
+      .select("id, name, slug, description, icon, created_at")
+      .order("name", { ascending: true });
+
+  if (communityError) {
+    console.error("Gagal mengambil komunitas:", {
+  message: communityError.message,
+  code: communityError.code,
+  details: communityError.details,
+  hint: communityError.hint,
+  status: communityError.status,
+});
+    setCommunitiesError(communityError.message);
+    setCommunitiesLoading(false);
+    return;
+  }
+
+  const { data: memberData, error: memberError } = await supabase
+    .from("community_members")
+    .select("community_id, user_id");
+
+  if (memberError) {
+    console.error("Gagal mengambil anggota komunitas:", memberError);
+    setCommunitiesError(memberError.message);
+    setCommunitiesLoading(false);
+    return;
+  }
+
+  const counts = {};
+
+  (memberData || []).forEach((member) => {
+    counts[member.community_id] =
+      (counts[member.community_id] || 0) + 1;
+  });
+
+  setCommunities(
+    (communityData || []).map((community) => ({
+      ...community,
+      member_count: counts[community.id] || 0,
+      is_member: (memberData || []).some(
+        (member) =>
+          member.community_id === community.id &&
+          member.user_id === session?.user?.id
+      ),
+    }))
+  );
+
+  setCommunitiesLoading(false);
+};
+
+  
+useEffect(() => {
+  if (!session?.user?.id) return;
+
+  fetchCommunities();
+}, [session?.user?.id]);
+
+const handleJoinCommunity = async (community) => {
+  if (!session?.user?.id) {
+    setCommunityMessage("Silakan login terlebih dahulu.");
+    return;
+  }
+
+  setCommunityActionLoading(true);
+  setCommunityMessage("");
+
+  const { error } = await supabase
+    .from("community_members")
+    .insert({
+      community_id: community.id,
+      user_id: session.user.id,
+    });
+
+  if (error) {
+    console.error("Gagal bergabung ke komunitas:", {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+      status: error.status,
+    });
+
+    setCommunityMessage(
+      error.code === "23505"
+        ? "Kamu sudah bergabung dengan komunitas ini."
+        : `Gagal bergabung: ${error.message}`
+    );
+  } else {
+    setCommunityMessage(
+      `Berhasil bergabung dengan ${community.name}!`
+    );
+
+    await fetchCommunities();
+  }
+
+  setCommunityActionLoading(false);
+};
+
+
+const handleLeaveCommunity = async (community) => {
+  if (!session?.user?.id || communityActionLoading) return;
+
+  const confirmed = window.confirm(
+    `Yakin ingin keluar dari ${community.name}?`
+  );
+
+  if (!confirmed) return;
+
+  setCommunityActionLoading(true);
+  setCommunityMessage("");
+
+  const { error } = await supabase
+    .from("community_members")
+    .delete()
+    .eq("community_id", community.id)
+    .eq("user_id", session.user.id);
+
+  if (error) {
+    console.error("Gagal keluar dari komunitas:", error);
+    setCommunityMessage(`Gagal keluar: ${error.message}`);
+  } else {
+    setCommunityMessage(`Kamu sudah keluar dari ${community.name}.`);
+  }
+
+  await fetchCommunities();
+  setCommunityActionLoading(false);
+};
+
+const handleOpenCommunity = async (community) => {
+  setSelectedCommunity(community);
+  setCommunityMembers([]);
+  setCommunityMessage("");
+  setCommunityMembersLoading(true);
+  setActiveMenu("Detail Komunitas");
+
+  const { data: memberships, error: membershipError } =
+    await supabase
+      .from("community_members")
+      .select("user_id, joined_at")
+      .eq("community_id", community.id)
+      .order("joined_at", { ascending: true });
+
+  if (membershipError) {
+    console.error("Gagal mengambil anggota:", membershipError);
+    setCommunityMessage(
+      `Gagal mengambil anggota: ${membershipError.message}`
+    );
+    setCommunityMembersLoading(false);
+    return;
+  }
+
+  const userIds = (memberships || []).map((member) => member.user_id);
+  let profiles = [];
+
+  if (userIds.length > 0) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, username")
+      .in("id", userIds);
+
+    if (error) {
+      console.error("Gagal mengambil profil anggota:", error);
+      setCommunityMessage(
+        `Gagal mengambil profil anggota: ${error.message}`
+      );
+    } else {
+      profiles = data || [];
+    }
+  }
+
+  const profileMap = Object.fromEntries(
+    profiles.map((profile) => [profile.id, profile])
+  );
+
+  setCommunityMembers(
+    (memberships || []).map((member) => ({
+      ...member,
+      profile: profileMap[member.user_id] || null,
+    }))
+  );
+
+  setCommunityMembersLoading(false);
+};
+  
+const handleAvatarChange = (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  const allowedTypes = [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+  ];
+
+  if (!allowedTypes.includes(file.type)) {
+    setAvatarMessage("Gunakan foto JPG, PNG, atau WEBP.");
+    return;
+  }
+
+  if (file.size > 2 * 1024 * 1024) {
+    setAvatarMessage("Ukuran foto maksimal 2 MB.");
+    return;
+  }
+
+  setAvatarFile(file);
+  setAvatarPreview(URL.createObjectURL(file));
+  setAvatarMessage("");
+};
+
+
+const handleSaveAvatar = async () => {
+  if (!session?.user?.id) {
+    setAvatarMessage("Sesi login berakhir. Silakan login kembali.");
+    return;
+  }
+
+  if (!avatarFile) {
+    setAvatarMessage("Pilih foto terlebih dahulu.");
+    return;
+  }
+
+  setAvatarLoading(true);
+  setAvatarMessage("");
+
+  let uploadedPath = null;
+
+  try {
+    const userId = session.user.id;
+    const extension = avatarFile.name.split(".").pop()?.toLowerCase();
+
+    if (!["jpg", "jpeg", "png", "webp"].includes(extension)) {
+      throw new Error("Format foto harus JPG, JPEG, PNG, atau WEBP.");
+    }
+
+    const filePath = `${userId}/${crypto.randomUUID()}.${extension}`;
+
+    const { data: uploadData, error: uploadError } =
+      await supabase.storage
+        .from("avatars")
+        .upload(filePath, avatarFile, {
+          contentType: avatarFile.type,
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+    if (uploadError) throw uploadError;
+
+    uploadedPath = uploadData.path;
+
+    const { data: publicData } = supabase.storage
+      .from("avatars")
+      .getPublicUrl(uploadData.path);
+
+    const { data: updatedProfile, error: profileError } =
+      await supabase
+        .from("profiles")
+        .update({ avatar_url: publicData.publicUrl })
+        .eq("id", userId)
+        .select("id, full_name, username, bio, avatar_url")
+        .maybeSingle();
+
+    if (profileError) throw profileError;
+
+    if (!updatedProfile) {
+      throw new Error(
+        "Profil tidak ditemukan atau tidak dapat diperbarui. Periksa kebijakan RLS."
+      );
+    }
+
+    setProfile(updatedProfile);
+    setAvatarFile(null);
+    setAvatarPreview("");
+    setAvatarMessage("Foto profil berhasil diperbarui!");
+
+    const fileInput = document.getElementById("avatar-file-input");
+    if (fileInput) fileInput.value = "";
+
+    // File sudah tersimpan; jangan hapus file ini.
+    uploadedPath = null;
+  } catch (error) {
+    console.error("Gagal menyimpan foto profil:", error);
+
+    setAvatarMessage(
+      `Gagal menyimpan foto: ${error.message || "Terjadi kesalahan."}`
+    );
+
+    // Bersihkan file baru jika pembaruan profil gagal.
+    if (uploadedPath) {
+      const { error: cleanupError } = await supabase.storage
+        .from("avatars")
+        .remove([uploadedPath]);
+
+      if (cleanupError) {
+        console.error("Gagal membersihkan file avatar:", cleanupError);
+      }
+    }
+  } finally {
+    setAvatarLoading(false);
+  }
+};
+
+const handleDeleteAvatar = async () => {
+  if (!session?.user?.id) {
+    setAvatarMessage("Silakan login kembali.");
+    return;
+  }
+
+  const currentAvatarUrl = profile?.avatar_url;
+
+  if (!currentAvatarUrl) {
+    setAvatarMessage("Foto profil sudah dihapus.");
+    return;
+  }
+
+  const confirmed = window.confirm(
+    "Apakah kamu yakin ingin menghapus foto profil?"
+  );
+
+  if (!confirmed) return;
+
+  setAvatarLoading(true);
+  setAvatarMessage("");
+
+  try {
+    const userId = session.user.id;
+
+    const { data: updatedProfile, error: updateError } =
+      await supabase
+        .from("profiles")
+        .update({ avatar_url: null })
+        .eq("id", userId)
+        .select("id, full_name, username, bio, avatar_url")
+        .maybeSingle();
+
+    if (updateError) throw updateError;
+
+    if (!updatedProfile) {
+      throw new Error(
+        "Profil tidak dapat diperbarui. Periksa kebijakan RLS."
+      );
+    }
+
+    setProfile(updatedProfile);
+    setAvatarFile(null);
+    setAvatarPreview("");
+
+    const input = document.getElementById("avatar-file-input");
+    if (input) input.value = "";
+
+    // Hapus file Storage milik pengguna ini jika URL-nya cocok.
+    try {
+      const marker = "/storage/v1/object/public/avatars/";
+      const url = new URL(currentAvatarUrl);
+      const markerIndex = url.pathname.indexOf(marker);
+
+      if (markerIndex !== -1) {
+        const filePath = decodeURIComponent(
+          url.pathname.slice(markerIndex + marker.length)
+        );
+
+        if (filePath.startsWith(`${userId}/`)) {
+          const { error: storageError } = await supabase.storage
+            .from("avatars")
+            .remove([filePath]);
+
+          if (storageError) {
+            console.warn("Gagal menghapus file Storage:", storageError);
+          }
+        }
+      }
+    } catch (storageError) {
+      console.warn("Pembersihan file Storage gagal:", storageError);
+    }
+
+    setAvatarMessage("Foto profil berhasil dihapus.");
+  } catch (error) {
+    console.error("Gagal menghapus foto profil:", error);
+    setAvatarMessage(
+      error.message || "Gagal menghapus foto profil."
+    );
+  } finally {
+    setAvatarLoading(false);
+  }
+};
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -141,11 +554,13 @@ const topicList = Object.values(topics).sort(
   const fetchProfile = async () => {
     setProfileLoading(true);
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, full_name, username, bio")
-      .eq("id", session.user.id)
-      .single();
+    
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, username, bio, avatar_url")
+    .eq("id", session.user.id)
+    .single();
+
 
     if (error) {
       console.error("Gagal mengambil profil:", error);
@@ -251,63 +666,82 @@ useEffect(() => {
 useEffect(() => {
   if (!session?.user?.id) return;
 
+  const userId = session.user.id;
+
   const channel = supabase
-    .channel(`notifications-${session.user.id}`)
+    .channel(`notifications-${userId}`)
     .on(
       "postgres_changes",
       {
-        event: "INSERT",
+        event: "*",
         schema: "public",
         table: "notifications",
-        filter: `user_id=eq.${session.user.id}`,
+        filter: `user_id=eq.${userId}`,
       },
       async (payload) => {
-        console.log("Notifikasi realtime:", payload.new);
+        console.log("Perubahan notifikasi realtime:", payload);
 
-        const notification = payload.new;
+        // Notifikasi baru
+        if (payload.eventType === "INSERT") {
+          const notification = payload.new;
 
-        const { data: actorProfile, error } = await supabase
-          .from("profiles")
-          .select("id, full_name, username")
-          .eq("id", notification.actor_id)
-          .single();
+          const { data: actorProfile, error } = await supabase
+            .from("profiles")
+            .select("id, full_name, username")
+            .eq("id", notification.actor_id)
+            .maybeSingle();
 
-        if (error) {
-          console.error(
-            "Gagal mengambil profil actor realtime:",
-            error
-          );
-        }
-
-        const formattedNotification = {
-          ...notification,
-          actor: actorProfile || null,
-        };
-
-        setNotifications((current) => {
-          if (
-            current.some(
-              (item) => item.id === formattedNotification.id
-            )
-          ) {
-            return current;
+          if (error) {
+            console.error("Gagal mengambil profil actor:", error);
           }
 
-          return [formattedNotification, ...current];
-        });
+          const formattedNotification = {
+            ...notification,
+            actor: actorProfile || null,
+          };
+
+          setNotifications((current) => {
+            if (current.some((item) => item.id === notification.id)) {
+              return current;
+            }
+
+            return [formattedNotification, ...current];
+          });
+        }
+
+        // Notifikasi dihapus
+        if (payload.eventType === "DELETE") {
+          const deletedId = payload.old?.id;
+
+          if (deletedId != null) {
+            setNotifications((current) =>
+              current.filter((item) => item.id !== deletedId)
+            );
+          }
+        }
+
+        // Notifikasi diperbarui, misalnya ditandai sudah dibaca
+        if (payload.eventType === "UPDATE") {
+          const updated = payload.new;
+
+          setNotifications((current) =>
+            current.map((item) =>
+              item.id === updated.id
+                ? { ...item, ...updated }
+                : item
+            )
+          );
+        }
       }
     )
     .subscribe((status) => {
-      console.log(
-        "Status realtime notifications:",
-        status
-      );
+      console.log("Status realtime notifications:", status);
     });
 
   return () => {
     supabase.removeChannel(channel);
   };
-}, [session]);
+}, [session?.user?.id]);
 
 const markNotificationsAsRead = async () => {
   if (!session?.user?.id) return;
@@ -415,7 +849,7 @@ const handleNotificationClick = async (notification) => {
     if (userIds.length > 0) {
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
-        .select("id, full_name, username")
+        .select("id, full_name, username, avatar_url")
         .in("id", userIds);
 
       if (profileError) {
@@ -487,6 +921,7 @@ const formattedPosts = postData.map((post) => {
     username: profile?.username
       ? `@${profile.username}`
       : "@user",
+    avatar_url: profile?.avatar_url || null,
     comments: commentCounts[post.id] || 0,
     likes: likeCounts[post.id] || 0,
   };
@@ -559,10 +994,6 @@ const handleOpenProfileForm = () => {
 const handleUpdateProfile = async (event) => {
   event.preventDefault();
 
-  if (!session?.user?.id) {
-    return;
-  }
-
   if (!profileName.trim()) {
     setProfileError("Nama lengkap wajib diisi.");
     return;
@@ -576,28 +1007,65 @@ const handleUpdateProfile = async (event) => {
   setProfileSaving(true);
   setProfileError("");
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .update({
-      full_name: profileName.trim(),
-      username: profileUsername.trim().toLowerCase(),
-      bio: profileBio.trim(),
-    })
-    .eq("id", session.user.id)
-    .select()
-    .single();
+  try {
+    const {
+      data: { session: currentSession },
+      error: sessionError,
+    } = await supabase.auth.getSession();
 
-  if (error) {
-    console.error("Gagal memperbarui profil:", error);
-    setProfileError(error.message);
+    if (sessionError || !currentSession?.user?.id) {
+      setProfileError("Sesi login berakhir. Silakan login kembali.");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({
+        full_name: profileName.trim(),
+        username: profileUsername.trim().toLowerCase(),
+        bio: profileBio.trim(),
+      })
+      .eq("id", currentSession.user.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Gagal memperbarui profil:", error);
+      setProfileError(error.message);
+      return;
+    }
+
+    setProfile(data);
+
+    // Perbarui identitas pemilik postingan di tampilan
+    setPosts((currentPosts) =>
+      currentPosts.map((post) =>
+        post.user_id === currentSession.user.id
+          ? {
+              ...post,
+              user: data.full_name || "Pengguna Ruang Kita",
+              username: data.username
+                ? `@${data.username}`
+                : "@user",
+            }
+          : post
+      )
+    );
+
+    setProfileError("");
+    setShowProfileForm(false);
+  } catch (error) {
+    console.error("Kesalahan saat memperbarui profil:", error);
+    setProfileError(
+      error.message || "Gagal memperbarui profil."
+    );
+  } finally {
     setProfileSaving(false);
-    return;
   }
-
-  setProfile(data);
-  setShowProfileForm(false);
-  setProfileSaving(false);
 };
+
+
+
 
 const handleCreatePost = async (event) => {
   event.preventDefault();
@@ -615,40 +1083,110 @@ const handleCreatePost = async (event) => {
   setPostSubmitting(true);
   setPostSubmitError("");
 
-  const { data, error } = await supabase
-    .from("posts")
-    .insert({
-      user_id: session.user.id,
-      category: postCategory,
-      title: postTitle.trim(),
-      content: postContent.trim(),
-    })
-    .select()
-    .single();
+  let uploadedImagePath = null;
 
-  if (error) {
+  try {
+    let imageUrl = null;
+
+    // 1. Upload gambar jika pengguna memilih gambar
+    if (postImage) {
+      const fileExt =
+        postImage.name.split(".").pop()?.toLowerCase() || "jpg";
+
+      const fileName = `${crypto.randomUUID()}.${fileExt}`;
+      const filePath = `${session.user.id}/${fileName}`;
+
+      const { data: uploadData, error: uploadError } =
+        await supabase.storage
+          .from("post-images")
+          .upload(filePath, postImage, {
+            contentType: postImage.type,
+            upsert: false,
+          });
+
+      if (uploadError) {
+        throw new Error(
+          `Gagal mengunggah gambar: ${uploadError.message}`
+        );
+      }
+
+      uploadedImagePath = uploadData.path;
+
+      // 2. Ambil URL publik gambar
+      const { data: publicUrlData } = supabase.storage
+        .from("post-images")
+        .getPublicUrl(uploadData.path);
+
+      imageUrl = publicUrlData.publicUrl;
+    }
+
+    // 3. Simpan postingan dan URL gambar ke database
+    const { data, error } = await supabase
+      .from("posts")
+      .insert({
+        user_id: session.user.id,
+        category: postCategory,
+        title: postTitle.trim(),
+        content: postContent.trim(),
+        image_url: imageUrl,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(
+        `Gagal membuat postingan: ${error.message}`
+      );
+    }
+
+    // 4. Tambahkan postingan baru ke tampilan
+    const newPost = {
+      ...data,
+      user: profile?.full_name || "Pengguna Ruang Kita",
+      username: profile?.username
+        ? `@${profile.username}`
+        : "@user",
+      comments: 0,
+      likes: 0,
+      avatar_url: profile?.avatar_url || null,
+    };
+
+    setPosts((currentPosts) => [newPost, ...currentPosts]);
+
+    // 5. Bersihkan form setelah berhasil
+    setPostTitle("");
+    setPostCategory("Diskusi");
+    setPostContent("");
+    setPostImage(null);
+
+    if (postImagePreview) {
+      URL.revokeObjectURL(postImagePreview);
+    }
+
+    setPostImagePreview("");
+    setShowPostForm(false);
+  } catch (error) {
     console.error("Gagal membuat postingan:", error);
-    setPostSubmitError(error.message);
+    setPostSubmitError(error.message || "Terjadi kesalahan.");
+
+    // Bersihkan file yang baru diunggah jika penyimpanan postingan gagal
+    if (uploadedImagePath) {
+      const { error: cleanupError } = await supabase.storage
+        .from("post-images")
+        .remove([uploadedImagePath]);
+
+      if (cleanupError) {
+        console.error(
+          "Gagal membersihkan gambar yang tidak terpakai:",
+          cleanupError
+        );
+      }
+    }
+  } finally {
     setPostSubmitting(false);
-    return;
   }
-
-  const newPost = {
-    ...data,
-    user: session.user.user_metadata?.full_name || "Pengguna Ruang Kita",
-    username: "@user",
-    comments: 0,
-    likes: 0,
-  };
-
-  setPosts((currentPosts) => [newPost, ...currentPosts]);
-
-  setPostTitle("");
-  setPostCategory("Diskusi");
-  setPostContent("");
-  setShowPostForm(false);
-  setPostSubmitting(false);
 };
+
 
 const handleSharePost = async (postId) => {
   const shareUrl = `${window.location.origin}${window.location.pathname}?post=${postId}`;
@@ -722,7 +1260,48 @@ const handleOpenEditPost = (post) => {
   setEditPostTitle(post.title || "");
   setEditPostCategory(post.category || "Diskusi");
   setEditPostContent(post.content || "");
+  setEditPostImage(null);
+  setEditPostImagePreview("");
+  setRemovePostImage(false);
   setEditPostError("");
+};
+
+const handleRemovePostImage = async (post) => {
+  if (!session?.user?.id) {
+    alert("Silakan login terlebih dahulu.");
+    return;
+  }
+
+  if (!window.confirm("Hapus gambar dari postingan ini?")) {
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("posts")
+    .update({ image_url: null })
+    .eq("id", post.id)
+    .eq("user_id", session.user.id)
+    .select()
+    .maybeSingle();
+
+  if (error || !data) {
+    alert(
+      `Gagal menghapus gambar: ${
+        error?.message || "Periksa izin RLS Supabase."
+      }`
+    );
+    return;
+  }
+
+  setPosts((currentPosts) =>
+    currentPosts.map((item) =>
+      item.id === post.id
+        ? { ...item, image_url: null }
+        : item
+    )
+  );
+
+  alert("Gambar berhasil dihapus dari postingan.");
 };
 
 const handleSaveEditPost = async (event, postId) => {
@@ -741,44 +1320,113 @@ const handleSaveEditPost = async (event, postId) => {
   setEditPostSaving(true);
   setEditPostError("");
 
-  const { data, error } = await supabase
-    .from("posts")
-    .update({
-      title: editPostTitle.trim(),
-      category: editPostCategory,
-      content: editPostContent.trim(),
-    })
-    .eq("id", postId)
-    .eq("user_id", session.user.id)
-    .select()
-    .maybeSingle();
+  let uploadedImagePath = null;
 
-  if (error) {
-    console.error("Gagal mengedit postingan:", error);
-    setEditPostError(error.message);
-    setEditPostSaving(false);
-    return;
-  }
+  try {
+    const currentPost = posts.find((post) => post.id === postId);
 
-  if (!data) {
-    setEditPostError(
-      "Postingan tidak berhasil diperbarui. Periksa izin RLS Supabase."
+    if (!currentPost || currentPost.user_id !== session.user.id) {
+      throw new Error("Postingan tidak ditemukan atau bukan milikmu.");
+    }
+
+    // Pertahankan gambar lama jika tidak ada perubahan.
+    let imageUrl = currentPost.image_url || null;
+
+    // Jika pengguna meminta hapus gambar.
+    if (removePostImage) {
+      imageUrl = null;
+    }
+
+    // Jika pengguna memilih gambar baru, unggah ke Storage.
+    if (editPostImage) {
+      if (!editPostImage.type.startsWith("image/")) {
+        throw new Error("File yang dipilih harus berupa gambar.");
+      }
+
+      const fileExt =
+        editPostImage.name.split(".").pop()?.toLowerCase() || "jpg";
+
+      const fileName = `${crypto.randomUUID()}.${fileExt}`;
+      const filePath = `${session.user.id}/${fileName}`;
+
+      const { data: uploadData, error: uploadError } =
+        await supabase.storage
+          .from("post-images")
+          .upload(filePath, editPostImage, {
+            contentType: editPostImage.type,
+            upsert: false,
+          });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      uploadedImagePath = uploadData.path;
+
+      const { data: publicUrlData } = supabase.storage
+        .from("post-images")
+        .getPublicUrl(uploadData.path);
+
+      imageUrl = publicUrlData.publicUrl;
+    }
+
+    // Simpan perubahan postingan dan URL gambar.
+    const { data, error } = await supabase
+      .from("posts")
+      .update({
+        title: editPostTitle.trim(),
+        category: editPostCategory,
+        content: editPostContent.trim(),
+        image_url: imageUrl,
+      })
+      .eq("id", postId)
+      .eq("user_id", session.user.id)
+      .select()
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!data) {
+      throw new Error(
+        "Perubahan gagal disimpan. Periksa izin RLS Supabase."
+      );
+    }
+
+    setPosts((currentPosts) =>
+      currentPosts.map((post) =>
+        post.id === postId ? { ...post, ...data } : post
+      )
     );
+
+    setEditingPostId(null);
+    setEditPostImage(null);
+    setRemovePostImage(false);
+
+    if (editPostImagePreview) {
+      URL.revokeObjectURL(editPostImagePreview);
+    }
+
+    setEditPostImagePreview("");
+    setEditPostError("");
+  } catch (error) {
+    console.error("Gagal mengedit postingan:", error);
+    setEditPostError(
+      error.message || "Gagal menyimpan perubahan."
+    );
+
+    // Bersihkan file baru jika upload berhasil tetapi penyimpanan gagal.
+    if (uploadedImagePath) {
+      const { error: cleanupError } = await supabase.storage
+        .from("post-images")
+        .remove([uploadedImagePath]);
+
+      if (cleanupError) {
+        console.error("Gagal membersihkan gambar:", cleanupError);
+      }
+    }
+  } finally {
     setEditPostSaving(false);
-    return;
   }
-
-  setPosts((currentPosts) =>
-    currentPosts.map((post) =>
-      post.id === postId
-        ? { ...post, ...data }
-        : post
-    )
-  );
-
-  setEditingPostId(null);
-  setEditPostSaving(false);
-  setEditPostError("");
 };
 
 const toggleComments = async (postId) => {
@@ -789,6 +1437,7 @@ const toggleComments = async (postId) => {
     [postId]: !isOpen,
   }));
 
+  // Jika ditutup atau komentar sudah pernah dimuat, hentikan.
   if (isOpen || comments[postId]) {
     return;
   }
@@ -798,85 +1447,79 @@ const toggleComments = async (postId) => {
     [postId]: true,
   }));
 
-  const { data, error } = await supabase
-  .from("comments")
-  .select("*")
-  .eq("post_id", postId)
-  .order("created_at", { ascending: true });
+  try {
+    const { data, error } = await supabase
+      .from("comments")
+      .select("*")
+      .eq("post_id", postId)
+      .order("created_at", { ascending: true });
 
-if (error) {
-  console.error("Gagal mengambil komentar:", error);
-
-  setComments((current) => ({
-    ...current,
-    [postId]: [],
-  }));
-} else {
-  const commentData = data || [];
-
-  const userIds = [
-    ...new Set(commentData.map((comment) => comment.user_id)),
-  ];
-
-  let commentProfiles = [];
-
-  if (userIds.length > 0) {
-    const { data: profileData, error: profileError } = await supabase
-      .from("profiles")
-      .select("id, full_name, username")
-      .in("id", userIds);
-
-    if (profileError) {
-      console.error(
-        "Gagal mengambil profile komentar:",
-        profileError
-      );
-    } else {
-      commentProfiles = profileData || [];
+    if (error) {
+      throw error;
     }
-  }
 
-  const commentProfileMap = {};
+    const commentData = data || [];
 
-  commentProfiles.forEach((profile) => {
-    commentProfileMap[profile.id] = profile;
-  });
+    const userIds = [
+      ...new Set(commentData.map((comment) => comment.user_id)),
+    ];
 
-  const formattedComments = commentData.map((comment) => {
-    const profile = commentProfileMap[comment.user_id];
+    let commentProfiles = [];
 
-    return {
-      ...comment,
-      user: profile?.full_name || "Pengguna Ruang Kita",
-      username: profile?.username
-        ? `@${profile.username}`
-        : "@user",
-    };
-  });
+    if (userIds.length > 0) {
+      const {
+        data: profileData,
+        error: profileError,
+      } = await supabase
+        .from("profiles")
+        .select("id, full_name, username")
+        .in("id", userIds);
 
-  setComments((current) => ({
-    ...current,
-    [postId]: formattedComments,
-  }));
-}
+      if (profileError) {
+        console.error(
+          "Gagal mengambil profil komentar:",
+          profileError
+        );
+      } else {
+        commentProfiles = profileData || [];
+      }
+    }
 
-  if (error) {
+    const commentProfileMap = {};
+
+    commentProfiles.forEach((profile) => {
+      commentProfileMap[profile.id] = profile;
+    });
+
+    const formattedComments = commentData.map((comment) => {
+      const profile = commentProfileMap[comment.user_id];
+
+      return {
+        ...comment,
+        user: profile?.full_name || "Pengguna Ruang Kita",
+        username: profile?.username
+          ? `@${profile.username}`
+          : "@user",
+      };
+    });
+
+    setComments((current) => ({
+      ...current,
+      [postId]: formattedComments,
+    }));
+  } catch (error) {
     console.error("Gagal mengambil komentar:", error);
+
     setComments((current) => ({
       ...current,
       [postId]: [],
     }));
-  } else {
-    setComments((current) => ({
+  } finally {
+    setCommentLoading((current) => ({
       ...current,
-      [postId]: data || [],
+      [postId]: false,
     }));
   }
-
-  setCommentLoading((current) => ({
-    ...current,
-    [postId]: false,
-  }));
 };
 
 const handleAddComment = async (postId) => {
@@ -928,13 +1571,14 @@ if (post && post.user_id !== session.user.id) {
     });
 }
 
-  const newComment = {
+const newComment = {
   ...data,
-  user:
-    session.user.user_metadata?.full_name ||
-    "Pengguna Ruang Kita",
-  username: "@user",
+  user: profile?.full_name || "Pengguna Ruang Kita",
+  username: profile?.username
+    ? `@${profile.username}`
+    : "@user",
 };
+
 setComments((current) => ({
   ...current,
   [postId]: [...(current[postId] || []), newComment],
@@ -960,6 +1604,64 @@ setPosts((currentPosts) =>
     ...current,
     [postId]: false,
   }));
+};
+
+  
+const handleAddReply = async (postId, parentCommentId) => {
+  const content = replyInputs[parentCommentId]?.trim();
+
+  if (!content || !session?.user?.id) return;
+
+  setCommentLoading((current) => ({
+    ...current,
+    [postId]: true,
+  }));
+
+  try {
+    const { data, error } = await supabase
+      .from("comments")
+      .insert({
+        post_id: postId,
+        user_id: session.user.id,
+        content,
+        parent_comment_id: parentCommentId,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    const newReply = {
+      ...data,
+      user: profile?.full_name || "Pengguna Ruang Kita",
+      username: profile?.username
+        ? `@${profile.username}`
+        : "@user",
+    };
+
+    setComments((current) => ({
+      ...current,
+      [postId]: [
+        ...(current[postId] || []),
+        newReply,
+      ],
+    }));
+
+    setReplyInputs((current) => ({
+      ...current,
+      [parentCommentId]: "",
+    }));
+
+    setReplyingTo(null);
+  } catch (error) {
+    console.error("Gagal mengirim balasan:", error);
+    alert(`Gagal mengirim balasan: ${error.message}`);
+  } finally {
+    setCommentLoading((current) => ({
+      ...current,
+      [postId]: false,
+    }));
+  }
 };
 
 const handleDeleteComment = async (postId, commentId) => {
@@ -1059,20 +1761,6 @@ const handleLike = async (postId) => {
       error,
     });
 
-    const post = posts.find((p) => p.id === postId);
-
-if (post && post.user_id !== session.user.id) {
-  await supabase
-    .from("notifications")
-    .insert({
-      user_id: post.user_id,
-      actor_id: session.user.id,
-      post_id: postId,
-      type: "like",
-      message: "menyukai postingan Anda"
-    });
-}
-
     if (error) {
       console.error("Gagal menghapus like:", error);
       alert(`Gagal menghapus like: ${error.message}`);
@@ -1097,6 +1785,31 @@ if (post && post.user_id !== session.user.id) {
         )
       );
     }
+
+
+      // Hapus notifikasi like yang dibuat oleh pengguna ini
+      const { data: deletedNotifications, error: notificationDeleteError } =
+  await supabase
+    .from("notifications")
+    .delete()
+    .eq("actor_id", session.user.id)
+    .eq("post_id", postId)
+    .eq("type", "like")
+    .select("id");
+
+console.log("HASIL HAPUS NOTIFIKASI:", {
+  deletedNotifications,
+  notificationDeleteError,
+});
+
+if (notificationDeleteError) {
+  console.error(
+    "Gagal menghapus notifikasi like:",
+    notificationDeleteError
+  );
+}
+
+
   } else {
     // Tambah like
     const { error } = await supabase
@@ -1110,11 +1823,13 @@ if (post && post.user_id !== session.user.id) {
       console.error("Gagal memberi like:", error);
       alert(`Gagal memberi like: ${error.message}`);
     } else {
+      // Perbarui status like
       setLikes((current) => ({
         ...current,
         [postId]: true,
       }));
 
+      // Tambah jumlah like
       setPosts((currentPosts) =>
         currentPosts.map((post) =>
           post.id === postId
@@ -1125,6 +1840,28 @@ if (post && post.user_id !== session.user.id) {
             : post
         )
       );
+
+      // Buat notifikasi untuk pemilik postingan
+      const post = posts.find((p) => p.id === postId);
+
+      if (post && post.user_id !== session.user.id) {
+        const { error: notificationError } = await supabase
+          .from("notifications")
+          .insert({
+            user_id: post.user_id,
+            actor_id: session.user.id,
+            post_id: postId,
+            type: "like",
+            message: "menyukai postingan Anda",
+          });
+
+        if (notificationError) {
+          console.error(
+            "Gagal membuat notifikasi like:",
+            notificationError
+          );
+        }
+      }
     }
   }
 
@@ -1133,6 +1870,7 @@ if (post && post.user_id !== session.user.id) {
     [postId]: false,
   }));
 };
+
 
 const handleLogout = async () => {
   const { error } = await supabase.auth.signOut();
@@ -1143,63 +1881,19 @@ const handleLogout = async () => {
   }
 };
 
-  if (loading) {
-
-const handleNotificationClick = async (notification) => {
-  // Tandai notifikasi sebagai sudah dibaca
-  if (!notification.is_read) {
-    const { error } = await supabase
-      .from("notifications")
-      .update({ is_read: true })
-      .eq("id", notification.id)
-      .eq("user_id", session.user.id);
-
-    if (error) {
-      console.error(
-        "Gagal menandai notifikasi sebagai sudah dibaca:",
-        error
-      );
-    }
-  }
-
-  // Update tampilan notifikasi
-  setNotifications((current) =>
-    current.map((item) =>
-      item.id === notification.id
-        ? { ...item, is_read: true }
-        : item
-    )
+if (loading) {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+      }}
+    >
+      Memuat Ruang Kita...
+    </div>
   );
-
-  // Kalau ada post_id, buka Beranda dan pilih postingannya
-  if (notification.post_id) {
-    setSelectedPostId(notification.post_id);
-    setActiveMenu("Beranda");
-  }
-};
-
-const extractTopics = (content) => {
-  if (!content) return [];
-
-  const matches = content.match(/#[a-zA-Z0-9_]+/g);
-
-  return matches
-    ? matches.map((topic) => topic.toLowerCase())
-    : [];
-};
-
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
-        }}
-      >
-        Memuat Ruang Kita...
-      </div>
-    );
-  }
+}
 
   if (!session) {
     return <Auth />;
@@ -1218,7 +1912,7 @@ const extractTopics = (content) => {
         </div>
 
         <nav className="navigation">
-  {["Beranda", "Eksplorasi", "Topik", "Notifikasi", "Profil"].map(
+  {["Beranda", "Eksplorasi", "Komunitas", "Topik", "Notifikasi", "Profil"].map(
     (menu) => (
       <button
         key={menu}
@@ -1235,6 +1929,7 @@ const extractTopics = (content) => {
           {menu === "Topik" && "#"}
           {menu === "Notifikasi" && "♡"}
           {menu === "Profil" && "●"}
+          {menu === "Komunitas" && "👥"}
         </span>
 
         <span className="nav-item-label">
@@ -1264,25 +1959,211 @@ const extractTopics = (content) => {
   + Buat Postingan
 </button>
 
-        <div className="sidebar-bottom">
-          <div className="mini-profile">
-            <div className="avatar">NA</div>
-            <div>
-              <strong>Novi Ardianto</strong>
-              <span>@novi</span>
-            </div>
-          </div>
-          <button
-  className="logout-button"
-  onClick={handleLogout}
->
-  🚪 Logout
-</button>
-        </div>
+<div className="sidebar-bottom">
+  <div className="mini-profile">
+    
+  <div className="avatar">
+    {profile?.avatar_url ? (
+      <img
+        src={profile.avatar_url}
+        alt="Foto profil"
+        className="profile-avatar-image"
+      />
+    ) : (
+      (profile?.full_name || "Pengguna Ruang Kita")
+        .split(" ")
+        .filter(Boolean)
+        .map((word) => word[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
+    )}
+  </div>
+
+
+    <div>
+      <strong>
+        {profile?.full_name || "Pengguna Ruang Kita"}
+      </strong>
+      <span>
+        @{profile?.username || "user"}
+      </span>
+    </div>
+  </div>
+
+  <button
+    className="logout-button"
+    onClick={handleLogout}
+  >
+    🚪 Logout
+  </button>
+</div>
+
       </aside>
 
       {/* Main Content */}
       <main className="main-content">
+
+        
+{/* Halaman daftar komunitas */}
+{activeMenu === "Komunitas" && (
+  <section className="community-page">
+    <div className="community-page-heading">
+      <h2>Komunitas Ruang Kita</h2>
+      <p>Temukan komunitas yang sesuai dengan minatmu.</p>
+    </div>
+
+    {communitiesLoading && <p>Memuat komunitas...</p>}
+
+    {communitiesError && (
+      <p className="community-error">{communitiesError}</p>
+    )}
+
+    {communityMessage && (
+      <p className="community-message">{communityMessage}</p>
+    )}
+
+    {!communitiesLoading && !communitiesError && (
+      <div className="community-grid">
+        {communities.map((community) => (
+          <article className="community-card" key={community.id}>
+            <div className="community-card-icon">
+              {community.icon}
+            </div>
+
+            <h3>{community.name}</h3>
+            <p>{community.description}</p>
+
+            <span className="community-count">
+              {community.member_count} anggota
+            </span>
+
+            <div className="community-card-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => handleOpenCommunity(community)}
+              >
+                Lihat Detail
+              </button>
+
+              {community.is_member ? (
+                <button
+                  type="button"
+                  className="community-leave-button"
+                  disabled={communityActionLoading}
+                  onClick={() => handleLeaveCommunity(community)}
+                >
+                  Keluar
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="community-join-button"
+                  disabled={communityActionLoading}
+                  onClick={() => handleJoinCommunity(community)}
+                >
+                  {communityActionLoading ? "Memproses..." : "Gabung"}
+                </button>
+              )}
+            </div>
+          </article>
+        ))}
+      </div>
+    )}
+  </section>
+)}
+
+{/* Halaman detail komunitas */}
+{activeMenu === "Detail Komunitas" && selectedCommunity && (
+  <section className="community-detail-page">
+    <button
+      type="button"
+      className="secondary-button"
+      onClick={() => setActiveMenu("Komunitas")}
+    >
+      ← Kembali ke Komunitas
+    </button>
+
+    <div className="community-detail-card">
+      <div className="community-detail-icon">
+        {selectedCommunity.icon}
+      </div>
+
+      <h2>{selectedCommunity.name}</h2>
+      <p>{selectedCommunity.description}</p>
+
+      <strong>
+        {communities.find(
+          (item) => item.id === selectedCommunity.id
+        )?.member_count ?? selectedCommunity.member_count ?? 0} anggota
+      </strong>
+
+      {communities.find(
+        (item) => item.id === selectedCommunity.id
+      )?.is_member ? (
+        <button
+          type="button"
+          className="community-leave-button"
+          disabled={communityActionLoading}
+          onClick={() => handleLeaveCommunity(selectedCommunity)}
+        >
+          Keluar dari Komunitas
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="community-join-button"
+          disabled={communityActionLoading}
+          onClick={() => handleJoinCommunity(selectedCommunity)}
+        >
+          {communityActionLoading ? "Memproses..." : "Gabung Komunitas"}
+        </button>
+      )}
+    </div>
+
+    {communityMessage && (
+      <p className="community-message">{communityMessage}</p>
+    )}
+
+    <div className="community-members-section">
+      <h3>Anggota Komunitas</h3>
+
+      {communityMembersLoading ? (
+        <p>Memuat anggota...</p>
+      ) : communityMembers.length === 0 ? (
+        <p>Belum ada anggota. Jadilah yang pertama bergabung!</p>
+      ) : (
+        <div className="community-member-list">
+          {communityMembers.map((member) => (
+            <div
+              className="community-member-item"
+              key={member.user_id}
+            >
+              <div className="community-member-avatar">
+                {(member.profile?.full_name || "P")
+                  .charAt(0)
+                  .toUpperCase()}
+              </div>
+
+              <div>
+                <strong>
+                  {member.profile?.full_name || "Pengguna Ruang Kita"}
+                </strong>
+                <small>
+                  {member.profile?.username
+                    ? `@${member.profile.username}`
+                    : "Anggota"}
+                </small>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  </section>
+)}
+
         {showPostForm && (
   <div className="post-form-overlay">
     <div className="post-form-card">
@@ -1344,6 +2225,76 @@ const extractTopics = (content) => {
             required
           />
         </div>
+
+          
+<div className="form-group">
+  <label>Gambar (opsional)</label>
+
+  <input
+    type="file"
+    accept="image/jpeg,image/png,image/webp,image/gif"
+    onChange={(event) => {
+      const file = event.target.files?.[0];
+
+      if (!file) return;
+
+      if (!file.type.startsWith("image/")) {
+        setPostSubmitError("Pilih file gambar yang valid.");
+        event.target.value = "";
+        return;
+      }
+
+      if (
+        ![
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+          "image/gif",
+        ].includes(file.type)
+      ) {
+        setPostSubmitError(
+          "Format gambar harus JPG, PNG, WEBP, atau GIF."
+        );
+        event.target.value = "";
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        setPostSubmitError(
+          "Ukuran gambar maksimal 5 MB."
+        );
+        event.target.value = "";
+        return;
+      }
+
+      setPostSubmitError("");
+      setPostImage(file);
+      setPostImagePreview(URL.createObjectURL(file));
+    }}
+  />
+
+  {postImagePreview && (
+    <div className="image-preview-container">
+      <img
+        src={postImagePreview}
+        alt="Preview gambar postingan"
+        className="post-image-preview"
+      />
+
+      <button
+        type="button"
+        className="secondary-button"
+        onClick={() => {
+          URL.revokeObjectURL(postImagePreview);
+          setPostImage(null);
+          setPostImagePreview("");
+        }}
+      >
+        Hapus gambar
+      </button>
+    </div>
+  )}
+</div>
 
         {postSubmitError && (
           <div className="auth-message auth-error">
@@ -1452,6 +2403,83 @@ const extractTopics = (content) => {
           </small>
         </div>
 
+        
+        
+{/* Foto Profil */}
+<div className="avatar-editor">
+  <h3>Foto Profil</h3>
+
+  {avatarPreview || profile?.avatar_url ? (
+    <img
+      src={avatarPreview || profile?.avatar_url}
+      alt="Foto profil"
+      className="avatar-editor-preview"
+    />
+  ) : (
+    <div className="avatar-initials">
+      {(
+        profile?.full_name ||
+        session?.user?.user_metadata?.full_name ||
+        profile?.username ||
+        session?.user?.email ||
+        "U"
+      )
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((word) => word[0])
+        .join("")
+        .toUpperCase()}
+    </div>
+  )}
+
+  <label className="avatar-file-label">
+    Pilih Foto
+    <input
+      id="avatar-file-input"
+      type="file"
+      accept="image/jpeg,image/png,image/webp"
+      onChange={handleAvatarChange}
+    />
+  </label>
+
+  <p className="avatar-message">
+    JPG, PNG, atau WEBP. Maksimal 2 MB.
+  </p>
+
+  {avatarMessage && (
+    <p className="avatar-message" role="status">
+      {avatarMessage}
+    </p>
+  )}
+
+  <div className="avatar-editor-actions">
+    <button
+      type="button"
+      onClick={handleSaveAvatar}
+      disabled={!avatarFile || avatarLoading}
+    >
+      {avatarLoading ? "Menyimpan..." : "Simpan Foto Profil"}
+    </button>
+
+    {profile?.avatar_url && (
+      <button
+        type="button"
+        className="avatar-delete-button"
+        onClick={() => {
+          handleDeleteAvatar?.();
+        }}
+        disabled={avatarLoading}
+      >
+        {avatarLoading ? "Memproses..." : "Hapus Foto"}
+      </button>
+    )}
+  </div>
+</div>
+
+
+
         {profileError && (
           <div className="auth-message auth-error">
             {profileError}
@@ -1492,11 +2520,6 @@ const extractTopics = (content) => {
           <div>
             <h2>{activeMenu}</h2>
             <p>Tempat berbagi cerita, ide, dan pengetahuan.</p>
-          </div>
-
-          <div className="top-actions">
-            <button className="icon-button">⌕</button>
-            <button className="login-button">Masuk</button>
           </div>
         </header>
 
@@ -1559,13 +2582,21 @@ const extractTopics = (content) => {
         <div className="post-header">
           <div className="post-user">
             <div className="avatar">
-              {post.user
-                .split(" ")
-                .map((word) => word[0])
-                .join("")
-                .slice(0, 2)
-                .toUpperCase()}
-            </div>
+  {post.avatar_url ? (
+    <img
+      src={post.avatar_url}
+      alt="Foto profil"
+      className="profile-avatar-image"
+    />
+  ) : (
+    post.user
+      ?.split(" ")
+      .map((word) => word[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "U"
+  )}
+</div>
 
             <div>
               <strong>{post.user}</strong>
@@ -1648,6 +2679,93 @@ const extractTopics = (content) => {
       rows={5}
       required
     />
+<div className="edit-post-image-section">
+  <label>Gambar postingan</label>
+
+  {editPostImagePreview ? (
+    <img
+      src={editPostImagePreview}
+      alt="Pratinjau gambar baru"
+      className="post-image-preview"
+    />
+  ) : post.image_url && !removePostImage ? (
+    <img
+      src={post.image_url}
+      alt="Gambar postingan saat ini"
+      className="post-image-preview"
+    />
+  ) : (
+    <p>Belum ada gambar.</p>
+  )}
+
+  <div className="post-image-actions">
+    <button
+      type="button"
+      disabled={editPostSaving}
+      onClick={() =>
+        document.getElementById(`edit-image-${post.id}`)?.click()
+      }
+    >
+      ✏️ Pilih gambar baru
+    </button>
+
+    {(post.image_url || editPostImage) && !removePostImage && (
+      <button
+        type="button"
+        disabled={editPostSaving}
+        onClick={() => {
+          setRemovePostImage(true);
+          setEditPostImage(null);
+
+          if (editPostImagePreview) {
+            URL.revokeObjectURL(editPostImagePreview);
+          }
+
+          setEditPostImagePreview("");
+        }}
+      >
+        🗑 Hapus gambar
+      </button>
+    )}
+
+    {removePostImage && (
+      <button
+        type="button"
+        disabled={editPostSaving}
+        onClick={() => setRemovePostImage(false)}
+      >
+        ↩ Batalkan hapus
+      </button>
+    )}
+  </div>
+
+  <input
+    id={`edit-image-${post.id}`}
+    type="file"
+    accept="image/*"
+    hidden
+    onChange={(event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      if (!file.type.startsWith("image/")) {
+        setEditPostError("Pilih file gambar yang valid.");
+        event.target.value = "";
+        return;
+      }
+
+      if (editPostImagePreview) {
+        URL.revokeObjectURL(editPostImagePreview);
+      }
+
+      setEditPostImage(file);
+      setRemovePostImage(false);
+      setEditPostImagePreview(URL.createObjectURL(file));
+      setEditPostError("");
+      event.target.value = "";
+    }}
+  />
+</div>
 
     {editPostError && (
       <p className="edit-post-error">
@@ -1684,6 +2802,19 @@ const extractTopics = (content) => {
       {post.content}
     </p>
   </>
+)}
+
+{/* Gambar postingan hanya tampil di luar mode edit */}
+{editingPostId !== post.id && post.image_url && (
+  <div className="post-image-container">
+    <img
+      src={post.image_url}
+      alt={`Gambar untuk ${post.title}`}
+      className="post-image"
+      loading="lazy"
+    />
+
+  </div>
 )}
 
         <div className="post-actions">
@@ -1739,15 +2870,63 @@ const extractTopics = (content) => {
             timeStyle: "short",
           })}
         </small>
-          {comment.user_id === session?.user?.id && (
+          <div className="comment-action-row">
   <button
-    className="delete-comment-button"
+    type="button"
+    className="reply-comment-button"
     onClick={() =>
-      handleDeleteComment(post.id, comment.id)
+      setReplyingTo(
+        replyingTo === comment.id ? null : comment.id
+      )
     }
   >
-    Hapus
+    {replyingTo === comment.id ? "Batal" : "↩ Balas"}
   </button>
+
+  {comment.user_id === session?.user?.id && (
+    <button
+      type="button"
+      className="delete-comment-button"
+      onClick={() =>
+        handleDeleteComment(post.id, comment.id)
+      }
+    >
+      Hapus
+    </button>
+  )}
+</div>
+
+{replyingTo === comment.id && (
+  <div className="reply-form">
+    <input
+      type="text"
+      placeholder={`Balas ${comment.user || "komentar ini"}...`}
+      value={replyInputs[comment.id] || ""}
+      onChange={(event) =>
+        setReplyInputs((current) => ({
+          ...current,
+          [comment.id]: event.target.value,
+        }))
+      }
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          handleAddReply(post.id, comment.id);
+        }
+      }}
+    />
+
+    <button
+      type="button"
+      onClick={() => handleAddReply(post.id, comment.id)}
+      disabled={
+        commentLoading[post.id] ||
+        !(replyInputs[comment.id] || "").trim()
+      }
+    >
+      Balas
+    </button>
+  </div>
 )}
       </div>
     </div>
@@ -1880,13 +3059,21 @@ const extractTopics = (content) => {
             >
               <div className="post-header">
                 <div className="post-avatar">
-                  {post.user
-                    ?.split(" ")
-                    .map((word) => word[0])
-                    .join("")
-                    .slice(0, 2)
-                    .toUpperCase() || "U"}
-                </div>
+  {post.avatar_url ? (
+    <img
+      src={post.avatar_url}
+      alt="Foto profil"
+      className="post-avatar-image"
+    />
+  ) : (
+    post.user
+      ?.split(" ")
+      .map((word) => word[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "U"
+  )}
+</div>
 
                 <div>
                   <strong>{post.user}</strong>
@@ -1897,10 +3084,18 @@ const extractTopics = (content) => {
                 </div>
               </div>
 
-              <div className="post-content">
-                <p>{post.content}</p>
-              </div>
+              <p className="post-content">
+                    {post.content}
+              </p>
 
+          {editingPostId !== post.id && post.image_url && (
+          <img
+            src={post.image_url}
+            alt={`Gambar untuk ${post.title}`}
+            className="post-image"
+            loading="lazy"
+          />
+        )}
              
 <div className="post-actions">
   <button
@@ -1931,37 +3126,137 @@ const extractTopics = (content) => {
         Belum ada komentar. Jadilah yang pertama!
       </p>
     ) : (
-      comments[post.id].map((comment) => (
-        <div className="comment-item" key={comment.id}>
-          <div className="avatar comment-avatar">
-            {(comment.user || "U").charAt(0).toUpperCase()}
-          </div>
+      
+(comments[post.id] || [])
+  .filter((comment) => !comment.parent_comment_id)
+  .map((comment) => (
+    <div className="comment-item" key={comment.id}>
+      <div className="avatar comment-avatar">
+        {(comment.user || "U").charAt(0).toUpperCase()}
+      </div>
 
-          <div className="comment-content">
-            <strong>{comment.user || "Pengguna Ruang Kita"}</strong>
-            <span className="comment-username">
-              {comment.username || "@user"}
-            </span>
-            <p>{comment.content}</p>
+      <div className="comment-content">
+        <strong>{comment.user || "Pengguna Ruang Kita"}</strong>
+        <span className="comment-username">
+          {comment.username || "@user"}
+        </span>
+        <p>{comment.content}</p>
 
-            <small>
-              {new Date(comment.created_at).toLocaleString("id-ID", {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
-            </small>
+        <small>
+          {new Date(comment.created_at).toLocaleString("id-ID", {
+            dateStyle: "medium",
+            timeStyle: "short",
+          })}
+        </small>
 
-            {comment.user_id === session?.user?.id && (
-              <button
-                className="delete-comment-button"
-                onClick={() => handleDeleteComment(post.id, comment.id)}
-              >
-                Hapus
-              </button>
-            )}
-          </div>
+        <div className="comment-action-row">
+          <button
+            type="button"
+            className="reply-comment-button"
+            onClick={() =>
+              setReplyingTo(
+                replyingTo === comment.id ? null : comment.id
+              )
+            }
+          >
+            {replyingTo === comment.id ? "Batal" : "↩ Balas"}
+          </button>
+
+          {comment.user_id === session?.user?.id && (
+            <button
+              type="button"
+              className="delete-comment-button"
+              onClick={() =>
+                handleDeleteComment(post.id, comment.id)
+              }
+            >
+              Hapus
+            </button>
+          )}
         </div>
-      ))
+
+        {replyingTo === comment.id && (
+          <div className="reply-form">
+            <input
+              type="text"
+              placeholder={`Balas ${comment.user || "komentar ini"}...`}
+              value={replyInputs[comment.id] || ""}
+              onChange={(event) =>
+                setReplyInputs((current) => ({
+                  ...current,
+                  [comment.id]: event.target.value,
+                }))
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  handleAddReply(post.id, comment.id);
+                }
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={() =>
+                handleAddReply(post.id, comment.id)
+              }
+              disabled={
+                commentLoading[post.id] ||
+                !(replyInputs[comment.id] || "").trim()
+              }
+            >
+              Balas
+            </button>
+          </div>
+        )}
+
+        {(comments[post.id] || [])
+          .filter(
+            (reply) => reply.parent_comment_id === comment.id
+          )
+          .map((reply) => (
+            <div className="comment-reply-item" key={reply.id}>
+              <div className="avatar comment-avatar">
+                {(reply.user || "U").charAt(0).toUpperCase()}
+              </div>
+
+              <div className="comment-content">
+                <strong>
+                  {reply.user || "Pengguna Ruang Kita"}
+                </strong>
+                <span className="comment-username">
+                  {reply.username || "@user"}
+                </span>
+                <p>{reply.content}</p>
+
+                <small>
+                  {new Date(reply.created_at).toLocaleString(
+                    "id-ID",
+                    {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    }
+                  )}
+                </small>
+
+                {reply.user_id === session?.user?.id && (
+                  <button
+                    type="button"
+                    className="delete-comment-button"
+                    onClick={() =>
+                      handleDeleteComment(post.id, reply.id)
+                    }
+                  >
+                    Hapus
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+      </div>
+    </div>
+  ))
+
     )}
 
     <div className="comment-form">
@@ -2091,13 +3386,21 @@ const extractTopics = (content) => {
               >
                 <div className="post-header">
                   <div className="post-avatar">
-                    {post.user
-                      ?.split(" ")
-                      .map((word) => word[0])
-                      .join("")
-                      .slice(0, 2)
-                      .toUpperCase() || "U"}
-                  </div>
+  {post.avatar_url ? (
+    <img
+      src={post.avatar_url}
+      alt="Foto profil"
+      className="post-avatar-image"
+    />
+  ) : (
+    post.user
+      ?.split(" ")
+      .map((word) => word[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "U"
+  )}
+</div>
 
                   <div>
                     <strong>{post.user}</strong>
@@ -2106,7 +3409,7 @@ const extractTopics = (content) => {
                 </div>
 
                 <div className="post-content">
-                  <p>{post.content}</p>
+                      {post.content}
                 </div>
 
                 <div className="post-meta">
@@ -2212,8 +3515,17 @@ const extractTopics = (content) => {
   <section className="profile-page">
     <div className="profile-card">
 
+      
       <div className="profile-avatar-large">
-        {profile?.full_name?.charAt(0)?.toUpperCase() || "P"}
+        {profile?.avatar_url ? (
+          <img
+            src={profile.avatar_url}
+            alt="Foto profil"
+            className="profile-avatar-image"
+          />
+        ) : (
+          profile?.full_name?.charAt(0)?.toUpperCase() || "P"
+        )}
       </div>
 
       <h2>
@@ -2242,10 +3554,37 @@ const extractTopics = (content) => {
 
       {/* Right Sidebar */}
       <aside className="right-sidebar">
-        <div className="search-box">
-          <span>⌕</span>
-          <input placeholder="Cari diskusi..." />
-        </div>
+        
+<div className="search-box">
+  <span>⌕</span>
+  <input
+    type="text"
+    value={exploreSearch}
+    onChange={(event) => {
+      setExploreSearch(event.target.value);
+      if (activeMenu !== "Eksplorasi") {
+        setActiveMenu("Eksplorasi");
+      }
+    }}
+    onKeyDown={(event) => {
+      if (event.key === "Enter") {
+        setActiveMenu("Eksplorasi");
+      }
+    }}
+    placeholder="Cari diskusi..."
+    aria-label="Cari diskusi"
+  />
+  {exploreSearch && (
+    <button
+      type="button"
+      className="clear-search"
+      aria-label="Hapus pencarian"
+      onClick={() => setExploreSearch("")}
+    >
+      ×
+    </button>
+  )}
+</div>
 
         <section className="side-card">
           <div className="side-title">
@@ -2253,59 +3592,102 @@ const extractTopics = (content) => {
             <span>•••</span>
           </div>
 
-          <div className="topic">
-            <span>#Pemrograman</span>
-            <small>1.2K diskusi</small>
-          </div>
+        
+<button
+  type="button"
+  className="topic"
+  onClick={() => {
+    setExploreSearch("Pemrograman");
+    setActiveMenu("Eksplorasi");
+  }}
+>
+  <span>#Pemrograman</span>
+  <small>Jelajahi diskusi pemrograman</small>
+</button>
 
-          <div className="topic">
-            <span>#Teknologi</span>
-            <small>986 diskusi</small>
-          </div>
+<button
+  type="button"
+  className="topic"
+  onClick={() => {
+    setExploreSearch("Teknologi");
+    setActiveMenu("Eksplorasi");
+  }}
+>
+  <span>#Teknologi</span>
+  <small>Jelajahi diskusi teknologi</small>
+</button>
 
-          <div className="topic">
-            <span>#Mahasiswa</span>
-            <small>754 diskusi</small>
-          </div>
+<button
+  type="button"
+  className="topic"
+  onClick={() => {
+    setExploreSearch("Mahasiswa");
+    setActiveMenu("Eksplorasi");
+  }}
+>
+  <span>#Mahasiswa</span>
+  <small>Jelajahi diskusi mahasiswa</small>
+</button>
 
-          <div className="topic">
-            <span>#Karier</span>
-            <small>621 diskusi</small>
-          </div>
+<button
+  type="button"
+  className="topic"
+  onClick={() => {
+    setExploreSearch("Karier");
+    setActiveMenu("Eksplorasi");
+  }}
+>
+  <span>#Karier</span>
+  <small>Jelajahi diskusi karier</small>
+</button>
+
         </section>
 
-        <section className="side-card">
-          <div className="side-title">
-            <h3>Komunitas Aktif</h3>
-          </div>
+        
+<section className="side-card">
+  <div className="side-title">
+    <h3>Komunitas Aktif</h3>
+  </div>
 
-          <div className="community">
-            <div className="community-icon">💻</div>
-            <div>
-              <strong>Developer Indonesia</strong>
-              <small>12.4K anggota</small>
-            </div>
-          </div>
+  {communitiesLoading ? (
+    <p>Memuat komunitas...</p>
+  ) : communitiesError ? (
+    <p className="community-error">
+      Gagal memuat komunitas: {communitiesError}
+    </p>
+  ) : (
+    communities.slice(0, 3).map((community) => (
+      <button
+        type="button"
+        className="community"
+        key={community.id}
+        onClick={() => handleOpenCommunity(community)}
+      >
+        <div className="community-icon">
+          {community.icon}
+        </div>
 
-          <div className="community">
-            <div className="community-icon">🎓</div>
-            <div>
-              <strong>Mahasiswa Indonesia</strong>
-              <small>8.7K anggota</small>
-            </div>
-          </div>
+        <div className="community-info">
+          <strong>{community.name}</strong>
+          <small>{community.member_count} anggota</small>
+        </div>
 
-          <div className="community">
-            <div className="community-icon">🚀</div>
-            <div>
-              <strong>Tech Enthusiast</strong>
-              <small>5.2K anggota</small>
-            </div>
-          </div>
-        </section>
+        <span className="community-arrow">›</span>
+      </button>
+    ))
+  )}
+
+  <button
+    type="button"
+    className="view-all-communities"
+    onClick={() => setActiveMenu("Komunitas")}
+  >
+    Lihat semua komunitas →
+  </button>
+</section>
+
       </aside>
     </div>
   );
 }
-
 export default App;

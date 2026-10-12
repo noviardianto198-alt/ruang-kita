@@ -359,10 +359,15 @@ button {
 }
 
 .post-content {
-  color: #64748b;
-  line-height: 1.6;
-  font-size: 13px;
+  color: #526581;
+  line-height: 1.8;
+  font-size: 15px;
+  margin-top: 12px;
   margin-bottom: 18px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  text-align: left;
 }
 
 .post-actions {
@@ -1494,4 +1499,587 @@ button {
 .edit-post-error {
   color: #dc2626;
   font-size: 13px;
+}
+/* Preview gambar saat membuat postingan */
+.image-preview-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.post-image-preview {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  max-height: 280px;
+  height: auto;
+  object-fit: contain;
+  margin: 12px 0;
+  border-radius: 10px;
+}
+
+/* Gambar pada kartu postingan */
+.post-image {
+  display: block;
+  width: 100%;
+  max-width: 560px;
+  max-height: 380px;
+  height: auto;
+  object-fit: contain;
+  margin: 14px auto;
+  border-radius: 12px;
+}
+
+/* Pencarian di sidebar kanan */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.search-box input {
+  flex: 1;
+  min-width: 0;
+}
+
+.search-box .clear-search {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 22px;
+  color: #64748b;
+}
+
+/* Topik populer yang dapat diklik */
+.topic {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 16px 0;
+  border: none;
+  border-bottom: 1px solid #edf0f5;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  transition: background 0.2s ease, padding-left 0.2s ease;
+}
+
+.topic span {
+  color: #172b4d;
+  font-weight: 700;
+}
+
+.topic small {
+  margin-top: 5px;
+  color: #8796ad;
+  font-size: 13px;
+}
+
+.topic:hover {
+  padding-left: 8px;
+  background: #f8f9ff;
+}
+
+.topic:focus-visible {
+  outline: 2px solid #5145cd;
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* Komunitas aktif di sidebar */
+.community {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 12px 8px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  transition: background 0.2s ease;
+}
+
+.community:hover {
+  background: #f3f4ff;
+}
+
+.community:focus-visible {
+  outline: 2px solid #5145cd;
+  outline-offset: 2px;
+}
+
+.community-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: #f0f4f9;
+  font-size: 22px;
+}
+
+.community-info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.community-info strong {
+  color: #172b4d;
+  font-size: 14px;
+}
+
+.community-info small {
+  color: #8796ad;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.community-arrow {
+  color: #64748b;
+  font-size: 24px;
+}
+
+/* Halaman daftar komunitas */
+.community-page,
+.community-detail-page {
+  padding-bottom: 32px;
+}
+
+.community-page-heading {
+  margin-bottom: 24px;
+}
+
+.community-page-heading h2,
+.community-detail-card h2 {
+  color: #172b4d;
+}
+
+.community-page-heading p,
+.community-detail-card p {
+  color: #8796ad;
+  line-height: 1.7;
+}
+
+.community-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.community-card,
+.community-detail-card {
+  padding: 22px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #fff;
+}
+
+.community-card-icon,
+.community-detail-icon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  background: #f0f4ff;
+  font-size: 28px;
+}
+
+.community-card h3 {
+  margin: 16px 0 8px;
+  color: #172b4d;
+}
+
+.community-card p {
+  min-height: 60px;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.community-count {
+  display: block;
+  margin: 14px 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.community-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.community-join-button,
+.community-leave-button,
+.view-all-communities {
+  padding: 10px 14px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.community-join-button {
+  background: #5145cd;
+  color: white;
+}
+
+.community-leave-button {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.community-join-button:disabled,
+.community-leave-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.community-detail-page > .secondary-button {
+  margin-bottom: 18px;
+}
+
+.community-detail-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.community-members-section {
+  margin-top: 28px;
+}
+
+.community-member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.community-member-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #e8edf4;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.community-member-avatar {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #ede9fe;
+  color: #5145cd;
+  font-weight: 700;
+}
+
+.community-member-item > div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.community-member-item small {
+  color: #8796ad;
+}
+
+.community-message,
+.community-error {
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+.community-error {
+  color: #b91c1c;
+}
+
+.community-message {
+  color: #5145cd;
+}
+
+.view-all-communities {
+  width: 100%;
+  margin-top: 12px;
+  background: #f3f4ff;
+  color: #5145cd;
+}
+
+@media (max-width: 600px) {
+  .community-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+.avatar-editor {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px;
+  margin-top: 16px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+}
+
+.avatar-editor-preview,
+.avatar-initials {
+  width: 120px !important;
+  height: 120px !important;
+  min-width: 120px;
+  max-width: 120px !important;
+  max-height: 120px !important;
+  flex: 0 0 120px;
+  box-sizing: border-box;
+  border-radius: 50%;
+}
+
+.avatar-editor-preview {
+  display: block;
+  object-fit: cover;
+  object-position: center;
+  border: 3px solid #e2e8f0;
+}
+
+.avatar-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #4f46e5, #8b5cf6);
+  color: white;
+  font-size: 36px;
+  font-weight: 700;
+}
+
+.avatar-file-label {
+  display: inline-block;
+  padding: 9px 14px;
+  background: #f1f5f9;
+  color: #334155;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.avatar-file-label input {
+  display: block;
+  max-width: 220px;
+  margin-top: 8px;
+}
+
+.avatar-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.avatar-editor button {
+  padding: 10px 16px;
+  color: #fff;
+  background: #4f46e5;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.avatar-editor .avatar-delete-button {
+  background: #fff1f2;
+  color: #e11d48;
+  border: 1px solid #fecdd3;
+}
+
+.avatar-editor button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+
+.avatar-message {
+  color: #475569;
+  font-size: 14px;
+}
+
+.profile-avatar-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+/* Foto profil utama pada halaman Profil */
+.profile-page .profile-card .profile-avatar-large {
+  width: 120px;
+  height: 120px;
+  min-width: 120px;
+  max-width: 120px;
+  margin: 0 auto 20px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 40px;
+  font-weight: 700;
+}
+
+.profile-page .profile-card .profile-avatar-image {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 120px !important;
+  max-height: 120px !important;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 50%;
+}
+
+.comment-action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.reply-comment-button {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.reply-comment-button:hover {
+  color: #4f46e5;
+}
+
+.reply-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  margin-bottom: 12px;
+}
+
+.reply-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  outline: none;
+}
+
+.reply-form input:focus {
+  border-color: #818cf8;
+}
+
+.reply-form button {
+  border: none;
+  border-radius: 9px;
+  padding: 8px 13px;
+  background: #4f46e5;
+  color: white;
+  cursor: pointer;
+}
+
+.reply-form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.comment-reply-item {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  margin-left: 12px;
+  padding: 12px;
+  border-left: 2px solid #c7d2fe;
+  background: #f8fafc;
+  border-radius: 0 10px 10px 0;
+}
+
+.post-image-container {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.post-image-container .post-image {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  max-height: 270px;
+  height: auto;
+  object-fit: contain;
+  margin: 14px auto;
+  border-radius: 12px;
+}
+
+.post-image-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.post-image-actions button {
+  padding: 8px 12px;
+  border: 1px solid #dbe2f0;
+  border-radius: 8px;
+  background: white;
+  color: #4f46e5;
+  cursor: pointer;
+}
+
+.post-image-actions button:hover {
+  background: #eef2ff;
+}
+/* Foto profil pada menu Eksplorasi dan Topik */
+.post-avatar {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.post-avatar-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 100%;
+  min-height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
